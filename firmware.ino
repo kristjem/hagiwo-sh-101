@@ -28,7 +28,7 @@ int gate_timer2 = 0;
 float AD_CH1 = 0;
 float AD_CH1_calb = 1.085;//reduce resistance error
 float AD_CH2 = 0;
-//float AD_CH2_calb = 1.094;//reduce resistance error
+float AD_CH2_calb = 1.094;//reduce resistance error
 
 //menu setting
 byte menu = 1;//1=ch1 rec/play , 2=ch1 divide , 3 = reset , 4~6 =ch2 , 7 = MUTE ch1 , 8 = STOP ch1 , 9~10 ch2
@@ -102,137 +102,156 @@ void setup() {
  Wire.begin();
 }
 
+// ...below code eddited by kristjem...
+
+unsigned long lastDebounceTime = 0; 
+unsigned long debounceDelay = 50; 
+bool lastButtonState = LOW; 
+bool buttonState = LOW; 
+bool buttonPressed = false; 
+
 void loop() {
- old_SW = SW;
- old_CV_in1 = CV_in1;
- old_CV_in2 = CV_in2;
- old_CLK_in = CLK_in;
+  old_SW = SW;
+  old_CV_in1 = CV_in1;
+  old_CV_in2 = CV_in2;
+  old_CLK_in = CLK_in;
 
- //-------------------------------Rotery endoder--------------------------
- newPosition = myEnc.read();
+  //-------------------------------Rotery endoder--------------------------
+  newPosition = myEnc.read();
 
- if (mode1 == 1 && mode2 == 1) { //menu select
-   if ( (newPosition - 3) / 4  > oldPosition / 4) { //4 is resolution of encoder
-     oldPosition = newPosition;
-     i = i - 1;
-     disp_reflesh = 1;
-   }
+  if (mode1 == 1 && mode2 == 1) { //menu select
+    if ((newPosition - 3) / 4 > oldPosition / 4) { //4 is resolution of encoder
+      oldPosition = newPosition;
+      i = i - 1;
+      disp_reflesh = 1;
+    } else if ((newPosition + 3) / 4 < oldPosition / 4) { //4 is resolution of encoder
+      oldPosition = newPosition;
+      i = i + 1;
+      disp_reflesh = 1;
+    }
+    i = constrain(i, 1, 10);
+    menu = i;
+  } else if ((mode1 == 0) || (mode2 == 0)) { //REC operating
+    if (((newPosition - 3) / 4 > oldPosition / 4) && rec_step != 0) { //4 is resolution of encoder
+      oldPosition = newPosition;
+      rec_step = rec_step - 1; //while REC , turn left back step
+      disp_reflesh = 1;
 
-   else if ( (newPosition + 3) / 4  < oldPosition / 4 ) { //4 is resolution of encoder
-     oldPosition = newPosition;
-     i = i + 1;
-     disp_reflesh = 1;
-   }
-   i = constrain(i, 1, 10);
-   menu = i;
- }
+      if ((rec_step != 0) && (mode1 == 0)) {
+        max_step_ch1 = rec_step - 1;
+      } else if ((rec_step != 0) && (mode2 == 0)) {
+        max_step_ch2 = rec_step - 1;
+      }
+      max_step_ch1 = constrain(max_step_ch1, 0, 127);
+    } else if ((newPosition + 3) / 4 < oldPosition / 4) { //4 is resolution of encoder
+      oldPosition = newPosition;
 
- else if ((mode1 == 0) || (mode2 == 0) ) { //REC operating
-   if ( ((newPosition - 3) / 4  > oldPosition / 4) && rec_step != 0) { //4 is resolution of encoder
-     oldPosition = newPosition;
-     rec_step = rec_step - 1;//while REC , turn left back step
-     disp_reflesh = 1;
+      if (mode1 == 0) { //CH1 REC
+        stepgate_ch1[rec_step] = 0; //while REC , turn right set rest
+        stepcv_ch1[rec_step] = stepcv_ch1[rec_step - 1];
+        max_step_ch1 = rec_step;
+      } else if (mode2 == 0) { //CH2 REC
+        stepgate_ch2[rec_step] = 0; //while REC , turn right set rest
+        stepcv_ch2[rec_step] = stepcv_ch2[rec_step - 1];
+        max_step_ch2 = rec_step;
+      }
 
-     if ((rec_step != 0) && (mode1 == 0)) {
-       max_step_ch1 = rec_step - 1;
-     }
-     else if ((rec_step != 0) && (mode2 == 0)) {
-       max_step_ch2 = rec_step - 1;
-     }
-     max_step_ch1 = constrain(max_step_ch1, 0, 127);
-   }
+      rec_step++; //while REC , turn right rest step
+      disp_reflesh = 1;
+    }
+  }
 
-   else if ( (newPosition + 3) / 4  < oldPosition / 4 ) { //4 is resolution of encoder
-     oldPosition = newPosition;
+  //-----------------PUSH SW------------------------------------
+  int reading = digitalRead(10);
 
-     if (mode1 == 0) {   //CH1 REC
-       stepgate_ch1[rec_step] = 0;//while REC , turn right set rest
-       stepcv_ch1[rec_step] = stepcv_ch1[rec_step - 1] ;
-       max_step_ch1 = rec_step;
-     }
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
 
-     else if (mode2 == 0) {    //CH2 REC
-       stepgate_ch2[rec_step] = 0;//while REC , turn right set rest
-       stepcv_ch2[rec_step] = stepcv_ch2[rec_step - 1] ;
-       max_step_ch2 = rec_step;
-     }
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+      if (buttonState == HIGH) {
+        buttonPressed = true;
+      }
+    }
+  }
 
-     rec_step++;//while REC , turn right rest step
-     disp_reflesh = 1;
-   }
- }
+  lastButtonState = reading;
 
- //-----------------PUSH SW------------------------------------
- SW = digitalRead(10);
- if (SW == 1 && old_SW != 1) {
-   disp_reflesh = 1;
-   switch (menu) {
-     case 1:
-       mode1 = !mode1; //rec <-> play change
-       if (mode1 == 0) {// when play to rec
-         rec_step = 0;//reset rec_step
-         max_step_ch1 = rec_step;
-       }
-       if (mode1 == 1) {// when rec to play
-         step_ch1 = 0;//reset play step
-       }
-       break;
+  if (buttonPressed) {
+    disp_reflesh = 1;
+    switch (menu) {
+      case 1:
+        mode1 = !mode1; //rec <-> play change
+        if (mode1 == 0) { // when play to rec
+          rec_step = 0; //reset rec_step
+          max_step_ch1 = rec_step;
+        }
+        if (mode1 == 1) { // when rec to play
+          step_ch1 = 0; //reset play step
+        }
+        break;
 
-     case 2:
-       select_div_ch1 ++;
-       step_ch1 = 0;
-       if (select_div_ch1 > 6) {
-         select_div_ch1 = 0;
-       }
-       break;
+      case 2:
+        select_div_ch1++;
+        step_ch1 = 0;
+        if (select_div_ch1 > 6) {
+          select_div_ch1 = 0;
+        }
+        break;
 
-     case 3:
-       step_ch1_play = 0;//reset count
-       step_ch1 = 0;//reset count
-       break;
+      case 3:
+        step_ch1_play = 0; //reset count
+        step_ch1 = 0; //reset count
+        break;
 
-     case 4:
-       mode2 = !mode2;
-       if (mode2 == 0) {// when play to rec
-         rec_step = 0;//reset rec_step
-         max_step_ch2 = rec_step;
-       }
-       if (mode2 == 1) {// when rec to play
-         step_ch2 = 0;//reset play step
-       }
+      case 4:
+        mode2 = !mode2;
+        if (mode2 == 0) { // when play to rec
+          rec_step = 0; //reset rec_step
+          max_step_ch2 = rec_step;
+        }
+        if (mode2 == 1) { // when rec to play
+          step_ch2 = 0; //reset play step
+        }
 
-       break;
+        break;
 
-     case 5:
-       select_div_ch2 ++;
-       if (select_div_ch2 > 6) {
-         select_div_ch2 = 0;
-       }
-       break;
+      case 5:
+        select_div_ch2++;
+        if (select_div_ch2 > 6) {
+          select_div_ch2 = 0;
+        }
+        break;
 
-     case 6:
-       step_ch2_play = 0;//reset count
-       step_ch2 = 0;//reset count
-       break;
+      case 6:
+        step_ch2_play = 0; //reset count
+        step_ch2 = 0; //reset count
+        break;
 
-     case 7:
-       mute_ch1 = !mute_ch1;
-       break;
+      case 7:
+        mute_ch1 = !mute_ch1;
+        break;
 
-     case 8:
-       stop_ch1 = !stop_ch1;
-       break;
+      case 8:
+        stop_ch1 = !stop_ch1;
+        break;
 
-     case 9:
-       mute_ch2 = !mute_ch2;
-       break;
+      case 9:
+        mute_ch2 = !mute_ch2;
+        break;
 
-     case 10:
-       stop_ch2 = !stop_ch2;
-       break;
-   }
- }
- //-------------------------------CH1 REC--------------------------
+      case 10:
+        stop_ch2 = !stop_ch2;
+        break;
+    }
+    buttonPressed = false;
+  }
+
+  // ...above code eddited by kristjem...
+
+  //-------------------------------CH1 REC--------------------------
 
  if (mode1 == 0) {
    //when mode is REC and trig in
