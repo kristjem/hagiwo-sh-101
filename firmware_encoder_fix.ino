@@ -10,6 +10,32 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 
 #include <Wire.h>
+
+// Calibration factors for different voltage ranges
+// This is because one single calibration factor did not scale the output correctly
+float calb_factor_0_1V = 1.615; // Calibration factor for 0-1V
+float calb_factor_1_2V = 1.645; // Calibration factor for 1-2V
+float calb_factor_2_3V = 1.655; // Calibration factor for 2-3V
+float calb_factor_3_4V = 1.66;  // Calibration factor for 3-4V
+float calb_factor_4_5V = 1.66;  // Calibration factor for 4-5V
+
+// Function to select the appropriate calibration factor
+float selectCalibrationFactor(float raw_ADC_value) {
+  if (raw_ADC_value < 23) { // Below threshold, set to 0
+    return 0;
+  } else if (raw_ADC_value < 204) { // 0-1V range
+    return calb_factor_0_1V;
+  } else if (raw_ADC_value < 409) { // 1-2V range
+    return calb_factor_1_2V;
+  } else if (raw_ADC_value < 614) { // 2-3V range
+    return calb_factor_2_3V;
+  } else if (raw_ADC_value < 819) { // 3-4V range
+    return calb_factor_3_4V;
+  } else { // 4-5V range
+    return calb_factor_4_5V;
+  }
+}
+
 //Rotery encoder setting
 #define  ENCODER_OPTIMIZE_INTERRUPTS //counter measure of noise
 #include <Encoder.h>
@@ -251,65 +277,89 @@ void loop() {
 
   // ...above code eddited by kristjem...
 
-  //-------------------------------CH1 REC--------------------------
+    //-------------------------------CH1 REC--------------------------
+  if (mode1 == 0) {
+    //when mode is REC and trig in
+    CV_in2 = analogRead(9) / 2048; // 0 or 1
 
- if (mode1 == 0) {
-   //when mode is REC and trig in
-   CV_in2 = analogRead(9) / 2048; // 0 or 1
+    if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall, record CV input
 
-   if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall , record CV input
+      // Read raw ADC value for Channel 1
+      float raw_AD_CH1 = analogRead(8); // Read from analog pin 8
 
-     //analog read and quantize
-     AD_CH1 = analogRead(8) / 4 * AD_CH1_calb; //12bit to 10bit
-     for ( search_qnt = 0; search_qnt <= 61 ; search_qnt++ ) {// quantize
-       if ( AD_CH1 >= cv_qnt_thr[search_qnt] && AD_CH1 < cv_qnt_thr[search_qnt + 1]) {
-         stepcv_ch1[rec_step] = search_qnt;
-       }
-     }
-     stepgate_ch1[rec_step] = 1;
-     max_step_ch1 = rec_step;
+      // Select the appropriate calibration factor
+      float calibration_factor = selectCalibrationFactor(raw_AD_CH1);
 
-     //Check the input CV
-     intDAC(cv_qnt_out[stepcv_ch1[rec_step]]);//OUTPUT internal DAC
-     digitalWrite(1, LOW);// because LOW active , LOW is output
-     delay(5); //gate time 5msec
-     digitalWrite(1, HIGH);
+      // Apply calibration factor
+      if (calibration_factor == 0) {
+        AD_CH1 = 0;
+      } else {
+        AD_CH1 = raw_AD_CH1 * calibration_factor;
+      }
 
-     //add step
-     rec_step ++;
-     rec_step = constrain(rec_step, 0, 127);
-     disp_reflesh = 1;
-   }
- }
- //-------------------------------CH2 REC--------------------------
- if (mode2 == 0) {
-   //when mode is REC and trig in
-   CV_in2 = analogRead(9) / 2048; // 0 or 1
+      // Analog read and quantize
+      for (search_qnt = 0; search_qnt <= 61; search_qnt++) { // quantize
+        if (AD_CH1 >= cv_qnt_thr[search_qnt] && AD_CH1 < cv_qnt_thr[search_qnt + 1]) {
+          stepcv_ch1[rec_step] = search_qnt;
+        }
+      }
+      stepgate_ch1[rec_step] = 1;
+      max_step_ch1 = rec_step;
 
-   if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall , record CV input
+      // Check the input CV
+      intDAC(cv_qnt_out[stepcv_ch1[rec_step]]); // OUTPUT internal DAC
+      digitalWrite(1, LOW); // because LOW active, LOW is output
+      delay(5); // gate time 5msec
+      digitalWrite(1, HIGH);
 
-     //analog read and quantize
-     AD_CH2 = analogRead(8) / 4 * AD_CH1_calb; //12bit to 10bit
-     for ( search_qnt = 0; search_qnt <= 61 ; search_qnt++ ) {// quantize
-       if ( AD_CH2 >= cv_qnt_thr[search_qnt] && AD_CH2 < cv_qnt_thr[search_qnt + 1]) {
-         stepcv_ch2[rec_step] = search_qnt;
-       }
-     }
-     stepgate_ch2[rec_step] = 1;
-     max_step_ch2 = rec_step;
+      // Add step
+      rec_step++;
+      rec_step = constrain(rec_step, 0, 127);
+      disp_reflesh = 1;
+    }
+  }
 
-     //Check the input CV
-     MCP(cv_qnt_out[stepcv_ch2[rec_step]]);//OUTPUT internal DAC
-     digitalWrite(2, LOW);// because LOW active , LOW is output
-     delay(5);
-     digitalWrite(2, HIGH);
+  //-------------------------------CH2 REC--------------------------
+  if (mode2 == 0) {
+    //when mode is REC and trig in
+    CV_in2 = analogRead(9) / 2048; // 0 or 1
 
-     //add step
-     rec_step ++;
-     rec_step = constrain(rec_step, 0, 127);
-     disp_reflesh = 1;
-   }
- }
+    if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall, record CV input
+
+      // Read raw ADC value for Channel 2
+      float raw_AD_CH2 = analogRead(8); // Read from analog pin 8
+
+      // Select the appropriate calibration factor
+      float calibration_factor = selectCalibrationFactor(raw_AD_CH2);
+
+      // Apply calibration factor
+      if (calibration_factor == 0) {
+        AD_CH2 = 0;
+      } else {
+        AD_CH2 = raw_AD_CH2 * calibration_factor;
+      }
+
+      // Analog read and quantize
+      for (search_qnt = 0; search_qnt <= 61; search_qnt++) { // quantize
+        if (AD_CH2 >= cv_qnt_thr[search_qnt] && AD_CH2 < cv_qnt_thr[search_qnt + 1]) {
+          stepcv_ch2[rec_step] = search_qnt;
+        }
+      }
+      stepgate_ch2[rec_step] = 1;
+      max_step_ch2 = rec_step;
+
+      // Check the input CV
+      intDAC(cv_qnt_out[stepcv_ch2[rec_step]]); // OUTPUT internal DAC
+      digitalWrite(1, LOW); // because LOW active, LOW is output
+      delay(5); // gate time 5msec
+      digitalWrite(1, HIGH);
+
+      // Add step
+      rec_step++;
+      rec_step = constrain(rec_step, 0, 127);
+      disp_reflesh = 1;
+    }
+  }
 
  //-------------------------------OUTPUT SETTING--------------------------
 
