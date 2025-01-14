@@ -40,3 +40,5 @@ float AD_CH1_calb = 1.15;//reduce resistance error // CV in
 ```
 Next, fine tune the trim pots to pitch it all up or down.
 
+### Stripboard layout:
+![HAGIWO SH-101 strip board layout by Kristoffer Tjemsland](HAGIWO%20SH-101%20strip%20board%20layout%20by%20Kristoffer%20Tjemsland.png)
