@@ -10,32 +10,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 
 #include <Wire.h>
-
-// Calibration factors for different voltage ranges
-// This is because one single calibration factor did not scale the output correctly
-float calb_factor_0_1V = 1.615; // Calibration factor for 0-1V
-float calb_factor_1_2V = 1.645; // Calibration factor for 1-2V
-float calb_factor_2_3V = 1.655; // Calibration factor for 2-3V
-float calb_factor_3_4V = 1.66;  // Calibration factor for 3-4V
-float calb_factor_4_5V = 1.66;  // Calibration factor for 4-5V
-
-// Function to select the appropriate calibration factor
-float selectCalibrationFactor(float raw_ADC_value) {
-  if (raw_ADC_value < 23) { // Below threshold, set to 0
-    return 0;
-  } else if (raw_ADC_value < 204) { // 0-1V range
-    return calb_factor_0_1V;
-  } else if (raw_ADC_value < 409) { // 1-2V range
-    return calb_factor_1_2V;
-  } else if (raw_ADC_value < 614) { // 2-3V range
-    return calb_factor_2_3V;
-  } else if (raw_ADC_value < 819) { // 3-4V range
-    return calb_factor_3_4V;
-  } else { // 4-5V range
-    return calb_factor_4_5V;
-  }
-}
-
 //Rotery encoder setting
 #define  ENCODER_OPTIMIZE_INTERRUPTS //counter measure of noise
 #include <Encoder.h>
@@ -52,9 +26,9 @@ int gate_timer1 = 0;
 int gate_timer2 = 0;
 
 float AD_CH1 = 0;
-float AD_CH1_calb = 1.085;//reduce resistance error
+float AD_CH1_calb = 1.15;//reduce resistance error
 float AD_CH2 = 0;
-float AD_CH2_calb = 1.094;//reduce resistance error
+//float AD_CH2_calb = 1.094;//reduce resistance error
 
 //menu setting
 byte menu = 1;//1=ch1 rec/play , 2=ch1 divide , 3 = reset , 4~6 =ch2 , 7 = MUTE ch1 , 8 = STOP ch1 , 9~10 ch2
@@ -109,6 +83,16 @@ byte disp_step1 = 0;
 byte disp_step2 = 0;
 bool disp_reflesh = 1;//0=not reflesh display , 1= reflesh display , countermeasure of display reflesh bussy
 
+// Debounce settings
+const int debounceDelay = 75; // milliseconds
+unsigned long lastDebounceTime = 0;
+bool lastButtonState = HIGH;
+bool buttonState = HIGH;
+bool buttonPressed = false;
+
+// Function declaration
+void handleButtonPress();
+
 //-------------------------------Initial setting--------------------------
 void setup() {
  analogWriteResolution(10);
@@ -126,240 +110,196 @@ void setup() {
 
  //I2C connect
  Wire.begin();
+
+// Initialize Serial for debugging
+Serial.begin(9600);
+
+// Print quantization thresholds and DAC output values for verification
+Serial.println("Quantization Thresholds:");
+for (int i = 0; i < 62; i++) {
+Serial.print(cv_qnt_thr[i]);
+Serial.print(" ");
+}
+Serial.println();
+
+Serial.println("DAC Output Values:");
+for (int i = 0; i < 61; i++) {
+Serial.print(cv_qnt_out[i]);
+Serial.print(" ");
+}
+Serial.println();
 }
 
-// ...below code eddited by kristjem...
+float readAverageADC(int pin, int numSamples) {
+  float sum = 0;
+  for (int i = 0; i < numSamples; i++) {
+    sum += analogRead(pin);
+  }
+  return sum / numSamples;
+}
 
-unsigned long lastDebounceTime = 0; 
-unsigned long debounceDelay = 50; 
-bool lastButtonState = LOW; 
-bool buttonState = LOW; 
-bool buttonPressed = false; 
 
 void loop() {
-  old_SW = SW;
-  old_CV_in1 = CV_in1;
-  old_CV_in2 = CV_in2;
-  old_CLK_in = CLK_in;
+  // NEW CODE TO REDUCE NOISE ISSUES WITH THE BUTTON: START
+  // Read the button state
+  bool reading = digitalRead(10);
 
-  //-------------------------------Rotery endoder--------------------------
-  newPosition = myEnc.read();
-
-  if (mode1 == 1 && mode2 == 1) { //menu select
-    if ((newPosition - 3) / 4 > oldPosition / 4) { //4 is resolution of encoder
-      oldPosition = newPosition;
-      i = i - 1;
-      disp_reflesh = 1;
-    } else if ((newPosition + 3) / 4 < oldPosition / 4) { //4 is resolution of encoder
-      oldPosition = newPosition;
-      i = i + 1;
-      disp_reflesh = 1;
-    }
-    i = constrain(i, 1, 10);
-    menu = i;
-  } else if ((mode1 == 0) || (mode2 == 0)) { //REC operating
-    if (((newPosition - 3) / 4 > oldPosition / 4) && rec_step != 0) { //4 is resolution of encoder
-      oldPosition = newPosition;
-      rec_step = rec_step - 1; //while REC , turn left back step
-      disp_reflesh = 1;
-
-      if ((rec_step != 0) && (mode1 == 0)) {
-        max_step_ch1 = rec_step - 1;
-      } else if ((rec_step != 0) && (mode2 == 0)) {
-        max_step_ch2 = rec_step - 1;
-      }
-      max_step_ch1 = constrain(max_step_ch1, 0, 127);
-    } else if ((newPosition + 3) / 4 < oldPosition / 4) { //4 is resolution of encoder
-      oldPosition = newPosition;
-
-      if (mode1 == 0) { //CH1 REC
-        stepgate_ch1[rec_step] = 0; //while REC , turn right set rest
-        stepcv_ch1[rec_step] = stepcv_ch1[rec_step - 1];
-        max_step_ch1 = rec_step;
-      } else if (mode2 == 0) { //CH2 REC
-        stepgate_ch2[rec_step] = 0; //while REC , turn right set rest
-        stepcv_ch2[rec_step] = stepcv_ch2[rec_step - 1];
-        max_step_ch2 = rec_step;
-      }
-
-      rec_step++; //while REC , turn right rest step
-      disp_reflesh = 1;
-    }
-  }
-
-  //-----------------PUSH SW------------------------------------
-  int reading = digitalRead(10);
-
+  // If the button state has changed, reset the debounce timer
   if (reading != lastButtonState) {
     lastDebounceTime = millis();
   }
 
+  // Check if the debounce delay has passed
   if ((millis() - lastDebounceTime) > debounceDelay) {
+    // If the button state has changed, update the button state
     if (reading != buttonState) {
       buttonState = reading;
-      if (buttonState == HIGH) {
+
+      // Only consider the button press if the button is pressed (LOW state)
+      if (buttonState == LOW) {
         buttonPressed = true;
       }
     }
   }
 
+  // Save the reading for the next loop
   lastButtonState = reading;
 
+  // Handle button press
   if (buttonPressed) {
-    disp_reflesh = 1;
-    switch (menu) {
-      case 1:
-        mode1 = !mode1; //rec <-> play change
-        if (mode1 == 0) { // when play to rec
-          rec_step = 0; //reset rec_step
-          max_step_ch1 = rec_step;
-        }
-        if (mode1 == 1) { // when rec to play
-          step_ch1 = 0; //reset play step
-        }
-        break;
-
-      case 2:
-        select_div_ch1++;
-        step_ch1 = 0;
-        if (select_div_ch1 > 6) {
-          select_div_ch1 = 0;
-        }
-        break;
-
-      case 3:
-        step_ch1_play = 0; //reset count
-        step_ch1 = 0; //reset count
-        break;
-
-      case 4:
-        mode2 = !mode2;
-        if (mode2 == 0) { // when play to rec
-          rec_step = 0; //reset rec_step
-          max_step_ch2 = rec_step;
-        }
-        if (mode2 == 1) { // when rec to play
-          step_ch2 = 0; //reset play step
-        }
-
-        break;
-
-      case 5:
-        select_div_ch2++;
-        if (select_div_ch2 > 6) {
-          select_div_ch2 = 0;
-        }
-        break;
-
-      case 6:
-        step_ch2_play = 0; //reset count
-        step_ch2 = 0; //reset count
-        break;
-
-      case 7:
-        mute_ch1 = !mute_ch1;
-        break;
-
-      case 8:
-        stop_ch1 = !stop_ch1;
-        break;
-
-      case 9:
-        mute_ch2 = !mute_ch2;
-        break;
-
-      case 10:
-        stop_ch2 = !stop_ch2;
-        break;
-    }
-    buttonPressed = false;
+    buttonPressed = false; // Reset the button press flag
+    handleButtonPress(); // Call the function to handle the button press
   }
+ // NEW CODE TO REDUCE NOISE ISSUES WITH THE BUTTON: END
 
-  // ...above code eddited by kristjem...
+ old_CV_in1 = CV_in1;
+ old_CV_in2 = CV_in2;
+ old_CLK_in = CLK_in;
 
-    //-------------------------------CH1 REC--------------------------
-  if (mode1 == 0) {
-    //when mode is REC and trig in
-    CV_in2 = analogRead(9) / 2048; // 0 or 1
 
-    if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall, record CV input
+ //-------------------------------Rotery endoder--------------------------
+ newPosition = myEnc.read();
 
-      // Read raw ADC value for Channel 1
-      float raw_AD_CH1 = analogRead(8); // Read from analog pin 8
+ if (mode1 == 1 && mode2 == 1) { //menu select
+   if ( (newPosition - 3) / 4  > oldPosition / 4) { //4 is resolution of encoder
+     oldPosition = newPosition;
+     i = i - 1;
+     disp_reflesh = 1;
+   }
 
-      // Select the appropriate calibration factor
-      float calibration_factor = selectCalibrationFactor(raw_AD_CH1);
+   else if ( (newPosition + 3) / 4  < oldPosition / 4 ) { //4 is resolution of encoder
+     oldPosition = newPosition;
+     i = i + 1;
+     disp_reflesh = 1;
+   }
+   i = constrain(i, 1, 10);
+   menu = i;
+ }
 
-      // Apply calibration factor
-      if (calibration_factor == 0) {
-        AD_CH1 = 0;
-      } else {
-        AD_CH1 = raw_AD_CH1 * calibration_factor;
-      }
+ else if ((mode1 == 0) || (mode2 == 0) ) { //REC operating
+   if ( ((newPosition - 3) / 4  > oldPosition / 4) && rec_step != 0) { //4 is resolution of encoder
+     oldPosition = newPosition;
+     rec_step = rec_step - 1;//while REC , turn left back step
+     disp_reflesh = 1;
 
-      // Analog read and quantize
-      for (search_qnt = 0; search_qnt <= 61; search_qnt++) { // quantize
-        if (AD_CH1 >= cv_qnt_thr[search_qnt] && AD_CH1 < cv_qnt_thr[search_qnt + 1]) {
-          stepcv_ch1[rec_step] = search_qnt;
-        }
-      }
-      stepgate_ch1[rec_step] = 1;
-      max_step_ch1 = rec_step;
+     if ((rec_step != 0) && (mode1 == 0)) {
+       max_step_ch1 = rec_step - 1;
+     }
+     else if ((rec_step != 0) && (mode2 == 0)) {
+       max_step_ch2 = rec_step - 1;
+     }
+     max_step_ch1 = constrain(max_step_ch1, 0, 127);
+   }
 
-      // Check the input CV
-      intDAC(cv_qnt_out[stepcv_ch1[rec_step]]); // OUTPUT internal DAC
-      digitalWrite(1, LOW); // because LOW active, LOW is output
-      delay(5); // gate time 5msec
-      digitalWrite(1, HIGH);
+   else if ( (newPosition + 3) / 4  < oldPosition / 4 ) { //4 is resolution of encoder
+     oldPosition = newPosition;
 
-      // Add step
-      rec_step++;
-      rec_step = constrain(rec_step, 0, 127);
-      disp_reflesh = 1;
-    }
-  }
+     if (mode1 == 0) {   //CH1 REC
+       stepgate_ch1[rec_step] = 0;//while REC , turn right set rest
+       stepcv_ch1[rec_step] = stepcv_ch1[rec_step - 1] ;
+       max_step_ch1 = rec_step;
+     }
 
-  //-------------------------------CH2 REC--------------------------
-  if (mode2 == 0) {
-    //when mode is REC and trig in
-    CV_in2 = analogRead(9) / 2048; // 0 or 1
+     else if (mode2 == 0) {    //CH2 REC
+       stepgate_ch2[rec_step] = 0;//while REC , turn right set rest
+       stepcv_ch2[rec_step] = stepcv_ch2[rec_step - 1] ;
+       max_step_ch2 = rec_step;
+     }
 
-    if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall, record CV input
+     rec_step++;//while REC , turn right rest step
+     disp_reflesh = 1;
+   }
+ }
 
-      // Read raw ADC value for Channel 2
-      float raw_AD_CH2 = analogRead(8); // Read from analog pin 8
 
-      // Select the appropriate calibration factor
-      float calibration_factor = selectCalibrationFactor(raw_AD_CH2);
+ //-------------------------------CH1 REC--------------------------
 
-      // Apply calibration factor
-      if (calibration_factor == 0) {
-        AD_CH2 = 0;
-      } else {
-        AD_CH2 = raw_AD_CH2 * calibration_factor;
-      }
+ if (mode1 == 0) {
+   //when mode is REC and trig in
+   CV_in2 = analogRead(9) / 2048; // 0 or 1
 
-      // Analog read and quantize
-      for (search_qnt = 0; search_qnt <= 61; search_qnt++) { // quantize
-        if (AD_CH2 >= cv_qnt_thr[search_qnt] && AD_CH2 < cv_qnt_thr[search_qnt + 1]) {
-          stepcv_ch2[rec_step] = search_qnt;
-        }
-      }
-      stepgate_ch2[rec_step] = 1;
-      max_step_ch2 = rec_step;
+   if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall , record CV input
 
-      // Check the input CV
-      intDAC(cv_qnt_out[stepcv_ch2[rec_step]]); // OUTPUT internal DAC
-      digitalWrite(1, LOW); // because LOW active, LOW is output
-      delay(5); // gate time 5msec
-      digitalWrite(1, HIGH);
+     //analog read and quantize
+     AD_CH1 = readAverageADC(8, 10) / 4 * AD_CH1_calb; // 12bit to 10bit, average 10 samples
+        // DEBUGGING: print the raw ADC value for Channel 1
+        Serial.print("Raw ADC value for Channel 1: ");
+        Serial.println(AD_CH1);
+     for ( search_qnt = 0; search_qnt <= 61 ; search_qnt++ ) {// quantize
+       if ( AD_CH1 >= cv_qnt_thr[search_qnt] && AD_CH1 < cv_qnt_thr[search_qnt + 1]) {
+         stepcv_ch1[rec_step] = search_qnt;
+         // DEBUGGING: print the quantized value for Channel 1
+            Serial.print("Quantized value for Channel 1: ");
+            Serial.println(stepcv_ch1[rec_step]);
+       }
+     }
+     stepgate_ch1[rec_step] = 1;
+     max_step_ch1 = rec_step;
 
-      // Add step
-      rec_step++;
-      rec_step = constrain(rec_step, 0, 127);
-      disp_reflesh = 1;
-    }
-  }
+     //Check the input CV
+     intDAC(cv_qnt_out[stepcv_ch1[rec_step]]);//OUTPUT internal DAC
+     // DEBUG: Print the output value for Channel 1
+        Serial.print("Output value for Channel 1: ");
+        Serial.println(cv_qnt_out[stepcv_ch1[rec_step]]);
+     digitalWrite(1, LOW);// because LOW active , LOW is output
+     delay(5); //gate time 5msec
+     digitalWrite(1, HIGH);
+
+     //add step
+     rec_step ++;
+     rec_step = constrain(rec_step, 0, 127);
+     disp_reflesh = 1;
+   }
+ }
+ //-------------------------------CH2 REC--------------------------
+ if (mode2 == 0) {
+   //when mode is REC and trig in
+   CV_in2 = analogRead(9) / 2048; // 0 or 1
+
+   if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall , record CV input
+
+     //analog read and quantize
+     AD_CH2 = analogRead(8) / 4 * AD_CH1_calb; //12bit to 10bit
+     for ( search_qnt = 0; search_qnt <= 61 ; search_qnt++ ) {// quantize
+       if ( AD_CH2 >= cv_qnt_thr[search_qnt] && AD_CH2 < cv_qnt_thr[search_qnt + 1]) {
+         stepcv_ch2[rec_step] = search_qnt;
+       }
+     }
+     stepgate_ch2[rec_step] = 1;
+     max_step_ch2 = rec_step;
+
+     //Check the input CV
+     MCP(cv_qnt_out[stepcv_ch2[rec_step]]);//OUTPUT internal DAC
+     digitalWrite(2, LOW);// because LOW active , LOW is output
+     delay(5);
+     digitalWrite(2, HIGH);
+
+     //add step
+     rec_step ++;
+     rec_step = constrain(rec_step, 0, 127);
+     disp_reflesh = 1;
+   }
+ }
 
  //-------------------------------OUTPUT SETTING--------------------------
 
@@ -426,6 +366,74 @@ void loop() {
    OLED_display();//reflesh display
    disp_reflesh = 0;
  }
+}
+//-----------------PUSH SW------------------------------------
+void handleButtonPress() {
+  disp_reflesh = 1;
+  switch (menu) {
+    case 1:
+      mode1 = !mode1; // rec <-> play change
+      if (mode1 == 0) { // when play to rec
+        rec_step = 0; // reset rec_step
+        max_step_ch1 = rec_step;
+      }
+      if (mode1 == 1) { // when rec to play
+        step_ch1 = 0; // reset play step
+      }
+      break;
+
+    case 2:
+      select_div_ch1++;
+      step_ch1 = 0;
+      if (select_div_ch1 > 6) {
+        select_div_ch1 = 0;
+      }
+      break;
+
+    case 3:
+      step_ch1_play = 0; // reset count
+      step_ch1 = 0; // reset count
+      break;
+
+    case 4:
+      mode2 = !mode2;
+      if (mode2 == 0) { // when play to rec
+        rec_step = 0; // reset rec_step
+        max_step_ch2 = rec_step;
+      }
+      if (mode2 == 1) { // when rec to play
+        step_ch2 = 0; // reset play step
+      }
+      break;
+
+    case 5:
+      select_div_ch2++;
+      if (select_div_ch2 > 6) {
+        select_div_ch2 = 0;
+      }
+      break;
+
+    case 6:
+      step_ch2_play = 0; // reset count
+      step_ch2 = 0; // reset count
+      break;
+
+    case 7:
+      mute_ch1 = !mute_ch1;
+      break;
+
+    case 8:
+      stop_ch1 = !stop_ch1;
+      break;
+
+    case 9:
+      mute_ch2 = !mute_ch2;
+      break;
+
+    case 10:
+      stop_ch2 = !stop_ch2;
+      break;
+  }
 }
 
 

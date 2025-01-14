@@ -83,6 +83,16 @@ byte disp_step1 = 0;
 byte disp_step2 = 0;
 bool disp_reflesh = 1;//0=not reflesh display , 1= reflesh display , countermeasure of display reflesh bussy
 
+// Debounce settings
+const int debounceDelay = 75; // milliseconds
+unsigned long lastDebounceTime = 0;
+bool lastButtonState = HIGH;
+bool buttonState = HIGH;
+bool buttonPressed = false;
+
+// Function declaration
+void handleButtonPress();
+
 //-------------------------------Initial setting--------------------------
 void setup() {
  analogWriteResolution(10);
@@ -130,10 +140,42 @@ float readAverageADC(int pin, int numSamples) {
 
 
 void loop() {
- old_SW = SW;
+  // NEW CODE TO REDUCE NOISE ISSUES WITH THE BUTTON: START
+  // Read the button state
+  bool reading = digitalRead(10);
+
+  // If the button state has changed, reset the debounce timer
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  // Check if the debounce delay has passed
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // If the button state has changed, update the button state
+    if (reading != buttonState) {
+      buttonState = reading;
+
+      // Only consider the button press if the button is pressed (LOW state)
+      if (buttonState == LOW) {
+        buttonPressed = true;
+      }
+    }
+  }
+
+  // Save the reading for the next loop
+  lastButtonState = reading;
+
+  // Handle button press
+  if (buttonPressed) {
+    buttonPressed = false; // Reset the button press flag
+    handleButtonPress(); // Call the function to handle the button press
+  }
+ // NEW CODE TO REDUCE NOISE ISSUES WITH THE BUTTON: END
+
  old_CV_in1 = CV_in1;
  old_CV_in2 = CV_in2;
  old_CLK_in = CLK_in;
+
 
  //-------------------------------Rotery endoder--------------------------
  newPosition = myEnc.read();
@@ -189,76 +231,7 @@ void loop() {
    }
  }
 
- //-----------------PUSH SW------------------------------------
- SW = digitalRead(10);
- if (SW == 1 && old_SW != 1) {
-   disp_reflesh = 1;
-   switch (menu) {
-     case 1:
-       mode1 = !mode1; //rec <-> play change
-       if (mode1 == 0) {// when play to rec
-         rec_step = 0;//reset rec_step
-         max_step_ch1 = rec_step;
-       }
-       if (mode1 == 1) {// when rec to play
-         step_ch1 = 0;//reset play step
-       }
-       break;
 
-     case 2:
-       select_div_ch1 ++;
-       step_ch1 = 0;
-       if (select_div_ch1 > 6) {
-         select_div_ch1 = 0;
-       }
-       break;
-
-     case 3:
-       step_ch1_play = 0;//reset count
-       step_ch1 = 0;//reset count
-       break;
-
-     case 4:
-       mode2 = !mode2;
-       if (mode2 == 0) {// when play to rec
-         rec_step = 0;//reset rec_step
-         max_step_ch2 = rec_step;
-       }
-       if (mode2 == 1) {// when rec to play
-         step_ch2 = 0;//reset play step
-       }
-
-       break;
-
-     case 5:
-       select_div_ch2 ++;
-       if (select_div_ch2 > 6) {
-         select_div_ch2 = 0;
-       }
-       break;
-
-     case 6:
-       step_ch2_play = 0;//reset count
-       step_ch2 = 0;//reset count
-       break;
-
-     case 7:
-       mute_ch1 = !mute_ch1;
-       break;
-
-     case 8:
-       stop_ch1 = !stop_ch1;
-       break;
-
-     case 9:
-       mute_ch2 = !mute_ch2;
-       break;
-
-     case 10:
-       stop_ch2 = !stop_ch2;
-       break;
-   }
- }
  //-------------------------------CH1 REC--------------------------
 
  if (mode1 == 0) {
@@ -393,6 +366,74 @@ void loop() {
    OLED_display();//reflesh display
    disp_reflesh = 0;
  }
+}
+//-----------------PUSH SW------------------------------------
+void handleButtonPress() {
+  disp_reflesh = 1;
+  switch (menu) {
+    case 1:
+      mode1 = !mode1; // rec <-> play change
+      if (mode1 == 0) { // when play to rec
+        rec_step = 0; // reset rec_step
+        max_step_ch1 = rec_step;
+      }
+      if (mode1 == 1) { // when rec to play
+        step_ch1 = 0; // reset play step
+      }
+      break;
+
+    case 2:
+      select_div_ch1++;
+      step_ch1 = 0;
+      if (select_div_ch1 > 6) {
+        select_div_ch1 = 0;
+      }
+      break;
+
+    case 3:
+      step_ch1_play = 0; // reset count
+      step_ch1 = 0; // reset count
+      break;
+
+    case 4:
+      mode2 = !mode2;
+      if (mode2 == 0) { // when play to rec
+        rec_step = 0; // reset rec_step
+        max_step_ch2 = rec_step;
+      }
+      if (mode2 == 1) { // when rec to play
+        step_ch2 = 0; // reset play step
+      }
+      break;
+
+    case 5:
+      select_div_ch2++;
+      if (select_div_ch2 > 6) {
+        select_div_ch2 = 0;
+      }
+      break;
+
+    case 6:
+      step_ch2_play = 0; // reset count
+      step_ch2 = 0; // reset count
+      break;
+
+    case 7:
+      mute_ch1 = !mute_ch1;
+      break;
+
+    case 8:
+      stop_ch1 = !stop_ch1;
+      break;
+
+    case 9:
+      mute_ch2 = !mute_ch2;
+      break;
+
+    case 10:
+      stop_ch2 = !stop_ch2;
+      break;
+  }
 }
 
 
