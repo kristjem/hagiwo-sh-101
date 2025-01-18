@@ -84,7 +84,7 @@ byte disp_step2 = 0;
 bool disp_reflesh = 1;//0=not reflesh display , 1= reflesh display , countermeasure of display reflesh bussy
 
 // Debounce settings
-const int debounceDelay = 75; // milliseconds
+const int debounceDelay = 100; // milliseconds
 unsigned long lastDebounceTime = 0;
 bool lastButtonState = HIGH;
 bool buttonState = HIGH;
