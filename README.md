@@ -13,16 +13,16 @@ Original documentation by HAGIWO can be found [here (using Google Translate).](h
     The note C0 is at 0V, which should in theory output 0V from the SH-101 sequencer. But in practice, noise is introduced and quantized. This produces an off tone pitch for what should be C0 (0V). To fix this, there is an if statement that returns `readAverageADC` = 0, as long as the noise is below a set floor (found by debugging, for me et was about 65):
     ```cpp
     float readAverageADC(int pin, int numSamples) {
-    float sum = 0;
-    float average = 0;
-    for (int i = 0; i < numSamples; i++) {
-        sum += analogRead(pin);
-    }
-    average = sum / numSamples;
-    // Serial.println("Average ADC value: " + String(average));
-    if (average < 65) { // Adjust to make sure noise at 0V input is eliminated
-        return 0;
-    } else return average;
+        float sum = 0;
+        float average = 0;
+        for (int i = 0; i < numSamples; i++) {
+            sum += analogRead(pin);
+        }
+        average = sum / numSamples;
+        // Serial.println("Average ADC value: " + String(average));
+        if (average < 65) { // Adjust to make sure noise at 0V input is eliminated
+            return 0;
+        } else return average;
     }
     ```
 
