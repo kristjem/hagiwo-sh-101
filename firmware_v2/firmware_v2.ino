@@ -84,7 +84,7 @@ byte disp_step2 = 0;
 bool disp_reflesh = 1;//0=not reflesh display , 1= reflesh display , countermeasure of display reflesh bussy
 
 // Debounce settings
-const int debounceDelay = 75; // milliseconds
+const int debounceDelay = 100; // milliseconds
 unsigned long lastDebounceTime = 0;
 bool lastButtonState = HIGH;
 bool buttonState = HIGH;
@@ -112,30 +112,20 @@ void setup() {
  Wire.begin();
 
 // Initialize Serial for debugging
-Serial.begin(9600);
-
-// Print quantization thresholds and DAC output values for verification
-Serial.println("Quantization Thresholds:");
-for (int i = 0; i < 62; i++) {
-Serial.print(cv_qnt_thr[i]);
-Serial.print(" ");
-}
-Serial.println();
-
-Serial.println("DAC Output Values:");
-for (int i = 0; i < 61; i++) {
-Serial.print(cv_qnt_out[i]);
-Serial.print(" ");
-}
-Serial.println();
+// Serial.begin(9600);
 }
 
 float readAverageADC(int pin, int numSamples) {
   float sum = 0;
+  float average = 0;
   for (int i = 0; i < numSamples; i++) {
     sum += analogRead(pin);
   }
-  return sum / numSamples;
+  average = sum / numSamples;
+  // Serial.println("Average ADC value: " + String(average));
+  if (average < 65) { // Adjust to make sure noise at 0V input is eliminated
+    return 0;
+  } else return average;
 }
 
 
@@ -243,14 +233,14 @@ void loop() {
      //analog read and quantize
      AD_CH1 = readAverageADC(8, 10) / 4 * AD_CH1_calb; // 12bit to 10bit, average 10 samples
         // DEBUGGING: print the raw ADC value for Channel 1
-        Serial.print("Raw ADC value for Channel 1: ");
-        Serial.println(AD_CH1);
+        // Serial.print("Raw ADC value for Channel 1: ");
+        // Serial.println(AD_CH1);
      for ( search_qnt = 0; search_qnt <= 61 ; search_qnt++ ) {// quantize
        if ( AD_CH1 >= cv_qnt_thr[search_qnt] && AD_CH1 < cv_qnt_thr[search_qnt + 1]) {
          stepcv_ch1[rec_step] = search_qnt;
          // DEBUGGING: print the quantized value for Channel 1
-            Serial.print("Quantized value for Channel 1: ");
-            Serial.println(stepcv_ch1[rec_step]);
+            // Serial.print("Quantized value for Channel 1: ");
+            // Serial.println(stepcv_ch1[rec_step]);
        }
      }
      stepgate_ch1[rec_step] = 1;
@@ -259,8 +249,8 @@ void loop() {
      //Check the input CV
      intDAC(cv_qnt_out[stepcv_ch1[rec_step]]);//OUTPUT internal DAC
      // DEBUG: Print the output value for Channel 1
-        Serial.print("Output value for Channel 1: ");
-        Serial.println(cv_qnt_out[stepcv_ch1[rec_step]]);
+        // Serial.print("Output value for Channel 1: ");
+        // Serial.println(cv_qnt_out[stepcv_ch1[rec_step]]);
      digitalWrite(1, LOW);// because LOW active , LOW is output
      delay(5); //gate time 5msec
      digitalWrite(1, HIGH);
@@ -279,7 +269,7 @@ void loop() {
    if (old_CV_in2 == 1 && CV_in2 == 0) { //when trigger fall , record CV input
 
      //analog read and quantize
-     AD_CH2 = analogRead(8) / 4 * AD_CH1_calb; //12bit to 10bit
+     AD_CH2 = readAverageADC(8, 10) / 4 * AD_CH1_calb; // 12bit to 10bit, average 10 samples
      for ( search_qnt = 0; search_qnt <= 61 ; search_qnt++ ) {// quantize
        if ( AD_CH2 >= cv_qnt_thr[search_qnt] && AD_CH2 < cv_qnt_thr[search_qnt + 1]) {
          stepcv_ch2[rec_step] = search_qnt;
