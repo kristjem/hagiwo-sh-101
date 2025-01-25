@@ -118,7 +118,7 @@ void handleButtonPress() {
 void updateMenu() {
   switch (menu) {
     case 0:
-      root_note = (root_note + 1) % 24; // Cycle through 24 notes (12 major + 12 minor)
+      root_note = (root_note + 1) % 12; // Cycle through 12 notes (C to B)
       break;
     case 1:
       sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
@@ -193,7 +193,7 @@ void refreshDisplay() {
     display.setCursor(0, 0);
     if (menu == 0) display.print("> ");
     display.print("Root Note: ");
-    display.print(root_note);
+    display.print(note_names[root_note]);
 
     display.setCursor(0, 10);
     if (menu == 1) display.print("> ");
