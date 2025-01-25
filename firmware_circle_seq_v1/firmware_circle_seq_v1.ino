@@ -215,7 +215,16 @@ void refreshDisplay() {
     }
 
     // Adjust position based on sequence length
-    int resetSequenceY = 40 + ((sequence_length > 8) ? 10 : 0);
+    int resetSequenceY = 40;
+    if (sequence_length > 4) {
+      resetSequenceY += 10; // Move down for 8 steps
+    }
+    if (sequence_length > 8) {
+      resetSequenceY += 10; // Move further down for 16 steps
+    }
+    if (sequence_length == 16) {
+      resetSequenceY -= 10; // Adjust back up for 16 steps to avoid empty line
+    }
     display.setCursor(0, resetSequenceY);
     display.setTextColor(WHITE); // Ensure the "Reset Sequence" text is not highlighted
     if (menu == 4) display.print("> ");
