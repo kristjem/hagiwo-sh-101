@@ -24,7 +24,7 @@ byte current_div = 0;
 byte menu = 0;
 byte root_note = 0;
 byte sequence_length = 4;
-byte pattern[16] = {1, 1, 4, 3}; // Default pattern
+byte pattern[16] = {0, 0, 7, 5}; // Default pattern: [root, root, fifth, fourth]
 int step = 0; // Declare step as a global variable
 int clock_counter = 0; // Counter for clock division
 
@@ -124,7 +124,7 @@ void updateMenu() {
       sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
       // Initialize new pattern elements to a default value
       for (int i = 4; i < sequence_length; i++) {
-        pattern[i] = 1; // Default to 1 (C note in C major scale)
+        pattern[i] = 0; // Default to root note
       }
       break;
     case 2:
@@ -132,11 +132,11 @@ void updateMenu() {
       break;
     case 3:
       // Pattern update (example: toggle between two patterns)
-      if (pattern[0] == 1 && pattern[1] == 1) {
-        byte new_pattern[16] = {1, 1, 3, 4, 1, 1, 4, 3};
+      if (pattern[0] == 0 && pattern[1] == 0) {
+        byte new_pattern[16] = {0, 0, 7, 5, 0, 0, 7, 5};
         memcpy(pattern, new_pattern, sizeof(pattern));
       } else {
-        byte new_pattern[16] = {1, 1, 4, 3};
+        byte new_pattern[16] = {0, 0, 7, 5};
         memcpy(pattern, new_pattern, sizeof(pattern));
       }
       break;
@@ -147,13 +147,8 @@ void updateMenu() {
 }
 
 int getNoteFromPattern(int root, int step) {
-  int scale_index = root / 12;
-  int note_index = root % 12;
-  if (scale_index == 0) { // Major scale
-    return (note_index + circle_of_fifths_major[pattern[step % sequence_length] - 1]) % 12;
-  } else { // Minor scale
-    return (note_index + circle_of_fifths_minor[pattern[step % sequence_length] - 1]) % 12;
-  }
+  int note_index = (root + pattern[step % sequence_length]) % 12;
+  return note_index;
 }
 
 void generateSequence() {
