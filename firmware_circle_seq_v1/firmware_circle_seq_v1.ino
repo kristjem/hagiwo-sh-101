@@ -231,28 +231,34 @@ void refreshDisplay() {
     display.setTextSize(1);
     display.setTextColor(WHITE);
 
+    // Calculate the starting Y position based on the current menu item
+    int startY = 0;
+    if (menu > 3) {
+      startY = (menu - 3) * 10;
+    }
+
     // Draw menu items with a dot indicator for the current menu position
-    display.setCursor(0, 0);
+    display.setCursor(0, 0 - startY);
     if (menu == 0) display.print("> ");
     display.print("Root Note: ");
     display.print(note_names[root_note]);
 
-    display.setCursor(0, 10);
+    display.setCursor(0, 10 - startY);
     if (menu == 1) display.print("> ");
     display.print("Scale: ");
     display.print(is_major ? "Major" : "Minor");
 
-    display.setCursor(0, 20);
+    display.setCursor(0, 20 - startY);
     if (menu == 2) display.print("> ");
     display.print("Seq Length: ");
     display.print(sequence_length);
 
-    display.setCursor(0, 30);
+    display.setCursor(0, 30 - startY);
     if (menu == 3) display.print("> ");
     display.print("Div: ");
     display.print(div_options[current_div]);
 
-    display.setCursor(0, 40);
+    display.setCursor(0, 40 - startY);
     if (menu == 4) display.print("> ");
     display.print("Pattern: ");
     for (int i = 0; i < sequence_length; i++) {
@@ -267,7 +273,7 @@ void refreshDisplay() {
     }
 
     // Adjust position based on sequence length
-    int resetSequenceY = 50;
+    int resetSequenceY = 50 - startY;
     if (sequence_length > 4) {
       resetSequenceY += 10; // Move down for 8 steps
     }
