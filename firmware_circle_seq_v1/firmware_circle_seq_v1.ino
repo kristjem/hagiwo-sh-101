@@ -154,11 +154,22 @@ void updateMenu() {
       is_major = !is_major; // Toggle between major and minor scales
       break;
     case 2:
-      sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
-      // Initialize new pattern elements to a default value
-      for (int i = 4; i < sequence_length; i++) {
-        pattern[i] = 0; // Default to root note
+      if (sequence_length == 4) {
+        // Transition from 4 to 8 steps
+        for (int i = 0; i < 4; i++) {
+          pattern[4 + i] = pattern[i]; // Duplicate the first 4 steps
+        }
+        // Switch the last two notes
+        byte temp = pattern[6];
+        pattern[6] = pattern[7];
+        pattern[7] = temp;
+      } else if (sequence_length == 8) {
+        // Transition from 8 to 16 steps
+        for (int i = 0; i < 8; i++) {
+          pattern[8 + i] = pattern[7 - i]; // Reverse the order of the previous 8 steps
+        }
       }
+      sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
       break;
     case 3:
       current_div = (current_div + 1) % 7;
