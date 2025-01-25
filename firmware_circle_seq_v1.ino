@@ -28,6 +28,20 @@ byte pattern[16] = {1, 1, 4, 3}; // Default pattern
 const int circle_of_fifths_major[12] = {0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5};
 const int circle_of_fifths_minor[12] = {0, 5, 10, 3, 8, 1, 6, 11, 4, 9, 2, 7};
 
+// Define menu items
+enum MenuItem {
+    ROOT_NOTE,
+    SEQ_LENGTH,
+    DIV,
+    PATTERN,
+    MENU_SIZE
+};
+
+MenuItem currentMenuItem = ROOT_NOTE;
+int rootNote = 0;
+int seqLength = 4;
+int div = 1;
+
 void setup() {
   analogWriteResolution(12);
   pinMode(7, INPUT_PULLDOWN); // CLK in
@@ -42,8 +56,9 @@ void setup() {
 }
 
 void loop() {
-  handleEncoder();
+  handleEncoderInput();
   handleButtonPress();
+  updateOLED();
 
   // Menu Navigation and Settings
   if (buttonPressed) {
@@ -63,11 +78,11 @@ void loop() {
   refreshDisplay();
 }
 
-void handleEncoder() {
+void handleEncoderInput() {
   newPosition = myEnc.read();
   if ((newPosition / 4) != (oldPosition / 4)) {
     oldPosition = newPosition;
-    menu = (menu + (newPosition > oldPosition ? 1 : -1)) % 5; // Cycle through 5 menu options
+    currentMenuItem = (MenuItem)((currentMenuItem + (newPosition > oldPosition ? 1 : -1) + MENU_SIZE) % MENU_SIZE);
   }
 }
 
@@ -88,17 +103,17 @@ void handleButtonPress() {
 }
 
 void updateMenu() {
-  switch (menu) {
-    case 0:
+  switch (currentMenuItem) {
+    case ROOT_NOTE:
       root_note = (root_note + 1) % 24; // Cycle through 24 notes (12 major + 12 minor)
       break;
-    case 1:
+    case SEQ_LENGTH:
       sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
       break;
-    case 2:
+    case DIV:
       current_div = (current_div + 1) % 7;
       break;
-    case 3:
+    case PATTERN:
       // Pattern update (example: toggle between two patterns)
       if (pattern[0] == 1 && pattern[1] == 1) {
         byte new_pattern[16] = {1, 1, 3, 4, 1, 1, 4, 3};
@@ -108,8 +123,7 @@ void updateMenu() {
         memcpy(pattern, new_pattern, sizeof(pattern));
       }
       break;
-    case 4: // Reset sequence
-      resetSequence();
+    default:
       break;
   }
 }
@@ -144,6 +158,10 @@ void resetSequence() {
 }
 
 void refreshDisplay() {
+  updateOLED();
+}
+
+void updateOLED() {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);

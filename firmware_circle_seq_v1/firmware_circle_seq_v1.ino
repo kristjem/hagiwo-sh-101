@@ -25,9 +25,12 @@ byte menu = 0;
 byte root_note = 0;
 byte sequence_length = 4;
 byte pattern[16] = {1, 1, 4, 3}; // Default pattern
+int step = 0; // Declare step as a global variable
+int clock_counter = 0; // Counter for clock division
 
 const int circle_of_fifths_major[12] = {0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5};
 const int circle_of_fifths_minor[12] = {0, 5, 10, 3, 8, 1, 6, 11, 4, 9, 2, 7};
+const char* note_names[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
 void setup() {
   analogWriteResolution(12);
@@ -35,6 +38,8 @@ void setup() {
   pinMode(8, OUTPUT); // CV out
   pinMode(9, OUTPUT); // Trigger out
   pinMode(10, INPUT_PULLUP); // Push button
+  pinMode(1, OUTPUT); // CH1 gate out
+  pinMode(2, OUTPUT); // CH2 gate out
 
   display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
   display.clearDisplay();
@@ -59,7 +64,11 @@ void loop() {
   static bool old_CLK_in = 0;
   bool CLK_in = digitalRead(7);
   if (old_CLK_in == 0 && CLK_in == 1) {
-    generateSequence();
+    clock_counter++;
+    if (clock_counter >= div_options[current_div]) {
+      clock_counter = 0;
+      generateSequence();
+    }
   }
   old_CLK_in = CLK_in;
 
@@ -113,6 +122,10 @@ void updateMenu() {
       break;
     case 1:
       sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
+      // Initialize new pattern elements to a default value
+      for (int i = 4; i < sequence_length; i++) {
+        pattern[i] = 1; // Default to 1 (C note in C major scale)
+      }
       break;
     case 2:
       current_div = (current_div + 1) % 7;
@@ -144,21 +157,29 @@ int getNoteFromPattern(int root, int step) {
 }
 
 void generateSequence() {
-  static int step = 0;
   int note = getNoteFromPattern(root_note, step);
   int cv_value = map(note, 0, 12, 0, 4095); // Map note to CV range
-  analogWrite(8, cv_value / 4); // Output CV (12-bit to 10-bit conversion)
-  digitalWrite(9, HIGH); // Trigger pulse
+
+  // Output CV using onboard DAC and external DAC
+  intDAC(cv_value); // Onboard DAC
+  MCP(cv_value); // External DAC
+
+  // Gate out LOW (active)
+  digitalWrite(1, LOW); // CH1 gate out
+  digitalWrite(2, LOW); // CH2 gate out
   delay(5);
-  digitalWrite(9, LOW);
+  // Gate out HIGH (inactive)
+  digitalWrite(1, HIGH); // CH1 gate out
+  digitalWrite(2, HIGH); // CH2 gate out
+
   step++;
-  if (step >= sequence_length * div_options[current_div]) {
+  if (step >= sequence_length) {
     step = 0;
   }
+  disp_reflesh = 1; // Mark display for refresh
 }
 
 void resetSequence() {
-  static int step = 0;
   step = 0;
 }
 
@@ -188,15 +209,34 @@ void refreshDisplay() {
     if (menu == 3) display.print("> ");
     display.print("Pattern: ");
     for (int i = 0; i < sequence_length; i++) {
-      display.print(pattern[i]);
+      if (i == step % sequence_length) {
+        display.setTextColor(BLACK, WHITE); // Highlight the current step
+      } else {
+        display.setTextColor(WHITE);
+      }
+      int note = getNoteFromPattern(root_note, i);
+      display.print(note_names[note]);
       display.print(" ");
     }
 
-    display.setCursor(0, 40);
+    display.setCursor(0, 40 + (sequence_length > 8 ? 10 : 0)); // Adjust position based on sequence length
     if (menu == 4) display.print("> ");
     display.print("Reset Sequence");
 
     display.display();
     disp_reflesh = 0; // Reset display refresh flag
   }
+}
+
+// Onboard DAC output function
+void intDAC(int intDAC_OUT) {
+  analogWrite(A0, intDAC_OUT / 4); // "/4" -> 12bit to 10bit
+}
+
+// External DAC output function
+void MCP(int MCP_OUT) {
+  Wire.beginTransmission(0x60);
+  Wire.write((MCP_OUT >> 8) & 0x0F);
+  Wire.write(MCP_OUT);
+  Wire.endTransmission();
 }
