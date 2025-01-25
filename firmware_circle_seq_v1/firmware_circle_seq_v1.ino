@@ -204,7 +204,7 @@ void refreshDisplay() {
     if (menu == 3) display.print("> ");
     display.print("Pattern: ");
     for (int i = 0; i < sequence_length; i++) {
-      if (i == step % sequence_length) {
+      if (i == (step + sequence_length - 1) % sequence_length) {
         display.setTextColor(BLACK, WHITE); // Highlight the current step
       } else {
         display.setTextColor(WHITE);
@@ -214,7 +214,10 @@ void refreshDisplay() {
       display.print(" ");
     }
 
-    display.setCursor(0, 40 + (sequence_length > 8 ? 10 : 0)); // Adjust position based on sequence length
+    // Adjust position based on sequence length
+    int resetSequenceY = 40 + ((sequence_length > 8) ? 10 : 0);
+    display.setCursor(0, resetSequenceY);
+    display.setTextColor(WHITE); // Ensure the "Reset Sequence" text is not highlighted
     if (menu == 4) display.print("> ");
     display.print("Reset Sequence");
 
