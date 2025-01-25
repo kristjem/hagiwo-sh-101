@@ -27,10 +27,40 @@ byte sequence_length = 4;
 byte pattern[16] = {0, 0, 7, 5}; // Default pattern: [root, root, fifth, fourth]
 int step = 0; // Declare step as a global variable
 int clock_counter = 0; // Counter for clock division
+bool is_major = true; // Track if the scale is major or minor
 
-const int circle_of_fifths_major[12] = {0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5};
-const int circle_of_fifths_minor[12] = {0, 5, 10, 3, 8, 1, 6, 11, 4, 9, 2, 7};
 const char* note_names[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+
+// Major and minor scales for each root note
+const int major_scales[12][7] = {
+  {0, 2, 4, 5, 7, 9, 11}, // C major
+  {1, 3, 5, 6, 8, 10, 0}, // C# major
+  {2, 4, 6, 7, 9, 11, 1}, // D major
+  {3, 5, 7, 8, 10, 0, 2}, // D# major
+  {4, 6, 8, 9, 11, 1, 3}, // E major
+  {5, 7, 9, 10, 0, 2, 4}, // F major
+  {6, 8, 10, 11, 1, 3, 5}, // F# major
+  {7, 9, 11, 0, 2, 4, 6}, // G major
+  {8, 10, 0, 1, 3, 5, 7}, // G# major
+  {9, 11, 1, 2, 4, 6, 8}, // A major
+  {10, 0, 2, 3, 5, 7, 9}, // A# major
+  {11, 1, 3, 4, 6, 8, 10} // B major
+};
+
+const int minor_scales[12][7] = {
+  {0, 2, 3, 5, 7, 8, 10}, // C minor
+  {1, 3, 4, 6, 8, 9, 11}, // C# minor
+  {2, 4, 5, 7, 9, 10, 0}, // D minor
+  {3, 5, 6, 8, 10, 11, 1}, // D# minor
+  {4, 6, 7, 9, 11, 0, 2}, // E minor
+  {5, 7, 8, 10, 0, 1, 3}, // F minor
+  {6, 8, 9, 11, 1, 2, 4}, // F# minor
+  {7, 9, 10, 0, 2, 3, 5}, // G minor
+  {8, 10, 11, 1, 3, 4, 6}, // G# minor
+  {9, 11, 0, 2, 4, 5, 7}, // A minor
+  {10, 0, 1, 3, 5, 6, 8}, // A# minor
+  {11, 1, 2, 4, 6, 7, 9} // B minor
+};
 
 void setup() {
   analogWriteResolution(12);
@@ -80,7 +110,7 @@ void handleEncoder() {
   newPosition = myEnc.read();
   if ((newPosition - 3) / 4 > oldPosition / 4) { // Adjust the resolution to avoid multiple shifts
     oldPosition = newPosition;
-    menu = (menu + 1) % 5; // Cycle through 5 menu options
+    menu = (menu + 1) % 7; // Cycle through 7 menu options
     Serial.print("Encoder Position: ");
     Serial.println(newPosition);
     Serial.print("Menu: ");
@@ -88,7 +118,7 @@ void handleEncoder() {
     disp_reflesh = 1; // Mark display for refresh
   } else if ((newPosition + 3) / 4 < oldPosition / 4) { // Adjust the resolution to avoid multiple shifts
     oldPosition = newPosition;
-    menu = (menu - 1 + 5) % 5; // Ensure menu wraps around correctly
+    menu = (menu - 1 + 7) % 7; // Ensure menu wraps around correctly
     Serial.print("Encoder Position: ");
     Serial.println(newPosition);
     Serial.print("Menu: ");
@@ -121,16 +151,19 @@ void updateMenu() {
       root_note = (root_note + 1) % 12; // Cycle through 12 notes (C to B)
       break;
     case 1:
+      is_major = !is_major; // Toggle between major and minor scales
+      break;
+    case 2:
       sequence_length = (sequence_length == 4 ? 8 : (sequence_length == 8 ? 16 : 4));
       // Initialize new pattern elements to a default value
       for (int i = 4; i < sequence_length; i++) {
         pattern[i] = 0; // Default to root note
       }
       break;
-    case 2:
+    case 3:
       current_div = (current_div + 1) % 7;
       break;
-    case 3:
+    case 4:
       // Pattern update (example: toggle between two patterns)
       if (pattern[0] == 0 && pattern[1] == 0) {
         byte new_pattern[16] = {0, 0, 7, 5, 0, 0, 7, 5};
@@ -140,9 +173,23 @@ void updateMenu() {
         memcpy(pattern, new_pattern, sizeof(pattern));
       }
       break;
-    case 4: // Reset sequence
+    case 5:
+      randomizePattern();
+      break;
+    case 6: // Reset sequence
       resetSequence();
       break;
+  }
+}
+
+void randomizePattern() {
+  const int* scale = is_major ? major_scales[root_note] : minor_scales[root_note];
+  for (int i = 0; i < sequence_length; i++) {
+    if (i % 4 == 0) {
+      pattern[i] = 0; // Ensure the first note of each 4-step segment is the Root Note
+    } else {
+      pattern[i] = scale[random(0, 7)]; // Randomize pattern with valid notes from the selected scale
+    }
   }
 }
 
@@ -192,16 +239,21 @@ void refreshDisplay() {
 
     display.setCursor(0, 10);
     if (menu == 1) display.print("> ");
-    display.print("Seq Length: ");
-    display.print(sequence_length);
+    display.print("Scale: ");
+    display.print(is_major ? "Major" : "Minor");
 
     display.setCursor(0, 20);
     if (menu == 2) display.print("> ");
-    display.print("Div: ");
-    display.print(div_options[current_div]);
+    display.print("Seq Length: ");
+    display.print(sequence_length);
 
     display.setCursor(0, 30);
     if (menu == 3) display.print("> ");
+    display.print("Div: ");
+    display.print(div_options[current_div]);
+
+    display.setCursor(0, 40);
+    if (menu == 4) display.print("> ");
     display.print("Pattern: ");
     for (int i = 0; i < sequence_length; i++) {
       if (i == (step + sequence_length - 1) % sequence_length) {
@@ -215,7 +267,7 @@ void refreshDisplay() {
     }
 
     // Adjust position based on sequence length
-    int resetSequenceY = 40;
+    int resetSequenceY = 50;
     if (sequence_length > 4) {
       resetSequenceY += 10; // Move down for 8 steps
     }
@@ -227,7 +279,13 @@ void refreshDisplay() {
     }
     display.setCursor(0, resetSequenceY);
     display.setTextColor(WHITE); // Ensure the "Reset Sequence" text is not highlighted
-    if (menu == 4) display.print("> ");
+    if (menu == 5) display.print("> ");
+    display.print("Randomize Pattern");
+
+    resetSequenceY += 10;
+    display.setCursor(0, resetSequenceY);
+    display.setTextColor(WHITE); // Ensure the "Reset Sequence" text is not highlighted
+    if (menu == 6) display.print("> ");
     display.print("Reset Sequence");
 
     display.display();
