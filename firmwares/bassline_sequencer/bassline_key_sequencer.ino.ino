@@ -25,7 +25,8 @@
 #include <Adafruit_GFX.h>
 #include <Wire.h>
 #define ENCODER_OPTIMIZE_INTERRUPTS
-#include <Encoder.h>
+#include <EncoderTool.h>
+using namespace EncoderTool;
 
 /* ---------- OLED ---------- */
 #define OLED_ADDRESS 0x3C
@@ -34,9 +35,11 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 /* ---------- Encoder & UI ---------- */
-Encoder myEnc(6, 3);
-long oldPosition = -999;
-long newPosition = -999;
+// EncoderTool setup
+Encoder enc;
+const int ENC_PIN_A = 6; // adjust to match board wiring
+const int ENC_PIN_B = 3;
+long oldPosition = -999; // kept for compatibility with any legacy checks
 bool SW = 0, old_SW = 0;
 
 /* ---------- IO & runtime ---------- */
@@ -156,6 +159,10 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
   display.clearDisplay();
   display.display();
+
+  // initialize EncoderTool
+  enc.begin(ENC_PIN_A, ENC_PIN_B);
+  enc.setType(EncoderType::TYPE2);
 }
 
 /* ---------- Gate helpers ---------- */
@@ -220,20 +227,23 @@ void maybeAdvanceStep() {
 /* ---------- UI handling ---------- */
 void handleEncoderAndButton() {
   old_SW = SW;
-  SW = (digitalRead(10) == HIGH);
+  // button is wired as INPUT_PULLUP -> pressed == LOW
+  SW = (digitalRead(10) == LOW);
 
-  // Encoder delta
-  newPosition = myEnc.read();
-  bool turnedLeft  = ((newPosition - 3) / 4  > (oldPosition) / 4);
-  bool turnedRight = ((newPosition + 3) / 4  < (oldPosition) / 4);
+  // Encoder via EncoderTool
+  if (enc.valueChanged()) {
+    long dir = enc.getValue();
+    if (dir > 0) onTurn(+1);
+    else if (dir < 0) onTurn(-1);
+  }
 
-  if (turnedLeft)  { oldPosition = newPosition; onTurn(-1); }
-  if (turnedRight) { oldPosition = newPosition; onTurn(+1); }
-
-  // Button press toggles editMode or applies action
+  // Button press toggles editMode or applies action (debounced)
   if (SW && !old_SW) {
-    editMode = !editMode;
-    disp_reflesh = true;
+    delay(10); // simple debounce
+    if (digitalRead(10) == LOW) {
+      editMode = !editMode;
+      disp_reflesh = true;
+    }
   }
 }
 
