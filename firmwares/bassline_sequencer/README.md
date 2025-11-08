@@ -1,41 +1,40 @@
 # Bassline Key Sequencer (Dual-Channel) for Seeeduino XIAO
 
-A musical, pattern-based **bassline sequencer** for Eurorack that runs on the same hardware as the Hagiwo SH-101-style sequencer (Seeeduino XIAO + SSD1306 OLED + encoder + button + clock in).  
-It generates diatonic bass motifs that **stay in key**, and it can **auto-change patterns every N bars**. Two independent CV/Gate outputs are available; **CH2 mirrors CH1** with a selectable transpose (e.g., +12 semitones for octave lines).
+A **pattern-based bassline sequencer** for Eurorack, designed for the Hagiwo SH-101-style hardware (Seeeduino XIAO + SSD1306 OLED + encoder + button + clock in).  
+It generates **diatonic bass motifs that stay in key**, with optional **auto-pattern changes** every N bars. Two independent CV/Gate outputs are available; **CH2 mirrors CH1** with selectable transpose (e.g., +12 semitones for octave lines).
 
-> Built to be drop-in compatible with the original Hagiwo wiring and pinout.
+> Fully compatible with Hagiwo SH-101-style wiring and pinout.
 
 ---
 
 ## Features
 
-- **Key & Scale aware**: choose any root (C..B) and Major/Minor.
-- **Musical patterns**: predefined 4- and 8-step templates designed for bass.
-- **Flexible length**: use each pattern’s native length or force to 8 steps.
-- **Clock division per channel**: groove against your master clock.
-- **Auto pattern change**: optionally cycle pattern every 1/2/4/8/16/32 bars.
-- **Dual output**:
+- **Key & Scale aware** – choose any root (C..B) and Major/Minor. Patterns automatically conform to your key.
+- **Musical patterns** – predefined 4- and 8-step bass motifs: roots, fifths, octaves, scalar runs.
+- **Flexible pattern length** – use native pattern length or force 8-step loops.
+- **Clock division per channel** – groove against a master clock.
+- **Auto pattern change** – cycle pattern every 1/2/4/8/16/32 bars for song-like phrasing.
+- **Dual outputs**:
   - **CH1** = main bassline.
-  - **CH2** = same pattern, user-selectable transpose (default +12).
-- **Compact OLED UI**: one encoder + push button for everything.
-- **Tight gates**: short 10 ms gate pulses on each step by default.
+  - **CH2** = mirrored pattern, user-selectable transpose (default +12 semitones).
+- **Compact OLED UI** – one encoder + push button for navigation and editing.
+- **Tight gates** – 10 ms pulses per step.
+- **Smooth encoder handling** – rotations and clicks are separated for intuitive navigation and editing, even at fast turns.
 
 ---
 
 ## Hardware
 
-This firmware assumes the exact Hagiwo SH-101-style module connections:
+- **MCU**: Seeeduino XIAO  
+- **OLED**: SSD1306 128x64 (I2C `0x3C`)  
+- **Encoder**: A (D6), B (D3), Push Switch (D10)  
+- **Clock In**: D7 (rising edge advances)  
+- **CH1 Gate**: D1 (LOW active)  
+- **CH2 Gate**: D2 (LOW active)  
+- **CH1 CV**: Internal DAC (`A0`) via `intDAC()`  
+- **CH2 CV**: MCP4725 DAC (I2C `0x60`) via `MCP()`  
 
-- **MCU**: Seeeduino XIAO
-- **OLED**: SSD1306 128x64 (I2C at `0x3C`)
-- **Encoder**: A (D6), B (D3), Push Switch (D10)
-- **Clock In**: D7 (rising edge advances)
-- **CH1 Gate**: D1 (active LOW)
-- **CH2 Gate**: D2 (active LOW)
-- **CH1 CV**: Internal DAC (`A0`) via `intDAC()`
-- **CH2 CV**: MCP4725 DAC (I2C `0x60`) via `MCP()`
-
-> Pins 8 and 9 are left defined as inputs for compatibility but are not required.
+> Pins 8 and 9 are left defined as inputs for compatibility but are unused.
 
 ---
 
@@ -45,9 +44,9 @@ This firmware assumes the exact Hagiwo SH-101-style module connections:
    - Install **Adafruit GFX** and **Adafruit SSD1306**.
    - Install **Encoder** library by Paul Stoffregen.
 2. **Board Support**
-   - Add the Seeeduino/SAMD board package appropriate for the XIAO.
+   - Add the Seeeduino/SAMD board package appropriate for XIAO.
 3. **Clone / Copy**
-   - Drop `bassline_key_sequencer.ino` into your sketch folder.
+   - Drop `bassline_key_sequencer.ino` into a sketch folder.
 4. **Compile & Upload**
    - Select the **Seeeduino XIAO** board and correct port.
    - Upload.
@@ -56,66 +55,70 @@ This firmware assumes the exact Hagiwo SH-101-style module connections:
 
 ## Controls
 
-The UI is a single-line menu with **navigate** vs **edit** modes.
+UI operates in two modes: **navigate** vs **edit**.
 
 - **Rotate encoder**:
-  - **Navigate mode**: move between parameters.
-  - **Edit mode**: change the selected parameter’s value.
-- **Press encoder**: toggle between **navigate** and **edit**.
+  - **Navigate mode** – move between parameters.
+  - **Edit mode** – change the selected parameter’s value.
+- **Press encoder** – toggle between navigate and edit.
 
-### Parameters
+> Rotation and clicks are handled separately. A click immediately after a fast turn is ignored for 0.5s to prevent accidental toggles.
 
-- **Key**: C..B (transposes the entire pattern)
-- **Scale**: Major / Minor (maps scale degrees to semitones)
-- **Pattern**: 1..12 (predefined bass motifs)
-- **Len**:
-  - **Native**: use each pattern’s original 4 or 8 steps
-  - **Force8**: force 8-step looping
-- **Div1 / Div2**: clock divide per channel (1,2,4,8,16,32,64)
-- **Auto**: enable/disable auto pattern cycling
-- **Bars**: number of bars before changing pattern (1/2/4/8/16/32)
-- **Tr2**: CH2 transpose in semitones (-24..+24), default **+12**
-- **M1 / M2**: mute CH1 / CH2
+---
 
-> **Bars & bar counting**: 4 steps = 1 bar. When using 8-step patterns, a full pattern loop equals 2 bars.
+### Menu Parameters & Musical Role
+
+| Menu | Description | Musical Idea / Usability |
+|------|-------------|-------------------------|
+| **Key** | C..B root note | Transposes the entire bassline; start in C for simple jams or in any key to fit your song. |
+| **Scale** | Major / Minor | Maps pattern degrees to semitones; minor gives moody basslines, major is bright. |
+| **Pattern** | 1..12 | Select a bass motif: root-fifth jumps, scalar movement, octaves. Great for instant groove variation. |
+| **Len** | Native / Force8 | Native respects pattern’s 4/8 steps; Force8 ensures consistent 8-step loops for phrase alignment. |
+| **Div1 / Div2** | Clock divide per channel (1,2,4,8,16,32,64) | Control step timing: create syncopated or slower counterlines. Use Div2 with Tr2 for octave movement without clutter. |
+| **Auto** | On / Off | Enable automatic pattern cycling every N bars. Good for evolving basslines over time. |
+| **Bars** | 1/2/4/8/16/32 | Number of bars before auto-changing pattern; 4 bars = 1 musical phrase. |
+| **Tr2** | CH2 transpose (-24..+24) | Offset CH2 pattern by semitones; default +12 = octave counterline. Adds harmonic depth. |
+| **M1 / M2** | Mute CH1 / CH2 | Silence channels individually to create breaks or reduce clutter. |
+
+> **Bars & bar counting:** 4 steps = 1 bar. 8-step patterns count as 2 bars.
 
 ---
 
 ## Musical Approach
 
-Patterns are stored as **scale degrees** (1..7 with octave wrapping), so they automatically fit your selected **Key** and **Scale**. The result is a simple but effective generator of classic bass shapes (root-5th movement, scalar approaches, octave jumps, etc.).
-
-- You can extend patterns by adding your own degree arrays.
-- Want chromatic approaches? add ±1 semitone adjustments (see code comments for degree handling).
+- Patterns are stored as **scale degrees**, automatically fitting your selected **Key** and **Scale**.  
+- Designed for classic bass shapes: roots, fifths, octaves, scalar runs.  
+- Extendable: add custom degree arrays for personal grooves.  
+- For chromatic accents, modify ±1 semitone adjustments in code.
 
 ---
 
 ## Tips
 
-- Use **Div2** plus **Tr2=+12** to create octave-up counterlines that don’t step every tick, adding motion without crowding the bass.
-- Enable **Auto** with **Bars=4 or 8** for song-like phrasing where the bassline freshens every few bars.
-- If your oscillator expects 1V/oct and the pitch seems off a little, adjust your analog chain or modify the lookup table.
+- Use **Div2** + **Tr2 = +12** for octave counterlines that step less frequently than CH1.  
+- Enable **Auto** + **Bars = 4 or 8** for song-like phrasing where basslines refresh periodically.  
+- Adjust analog output scaling if your oscillator doesn’t track 1V/oct perfectly.
 
 ---
 
 ## License
 
-This project builds on open hardware ideas from Hagiwo’s SH-101-style sequencer and is provided under an MIT-style permissive license. Check original licenses for included libraries.
+MIT-style permissive license. Builds on open hardware concepts from Hagiwo SH-101 sequencer. Check included library licenses.
 
 ---
 
 ## Troubleshooting
 
-- **No OLED**: verify I2C wiring, SSD1306 address `0x3C`, and power.
-- **No CV on CH2**: check MCP4725 wiring and that it’s on `0x60`.
-- **Step doesn’t advance**: ensure a clean 0→1 rising clock on D7.
-- **Pitch range**: the internal table covers 61 semitones (0..60). Transpose plus key must stay within range.
+- **No OLED**: verify I2C wiring, address `0x3C`, and power.  
+- **No CV on CH2**: check MCP4725 wiring and I2C address `0x60`.  
+- **Steps don’t advance**: ensure clean 0→1 rising edge on D7.  
+- **Pitch range**: internal table covers 0..60 semitones. Key + Tr2 must stay in range.
 
 ---
 
 ## Roadmap Ideas
 
-- Independent pattern for CH2.
-- Accent/slide outputs.
-- More scales/modes (Dorian, Mixolydian).
+- Independent pattern for CH2.  
+- Accent/slide outputs.  
+- More scales/modes (Dorian, Mixolydian).  
 - CV inputs for Key/Pattern modulation.
